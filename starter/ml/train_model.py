@@ -2,9 +2,11 @@
 # Script to train machine learning model.
 # Add the necessary imports for the starter code.
 import pickle
+import os
+from pathlib import Path
 from sklearn.model_selection import train_test_split
-from starter.ml.data import process_data
-from starter.ml.model import train_model, compute_model_metrics, inference
+from data import process_data
+from model import train_model, compute_model_metrics, inference
 import numpy as np
 import pandas as pd
 from termcolor import colored, cprint
@@ -13,7 +15,8 @@ warnings.filterwarnings("ignore")
 
 def main():
     # Add code to load in the data.
-    data = pd.read_csv("data/census.csv")
+    filename = '../../data/census.csv'
+    data = pd.read_csv(filename)
 
     # Optional enhancement, use K-fold cross validation instead of a train-test split.
     train, test = train_test_split(data, test_size=0.20)
@@ -38,9 +41,9 @@ def main():
     model = train_model(X_train, y_train)
 
     # Save the model and label binarizer to disk.
-    model_filename = "model/model.pkl"
-    lb_filename = "model/label_binarizer.pkl"
-    encoder_filename = "model/encoder.pkl"
+    model_filename = "../../model/model.pkl"
+    lb_filename = "../../model/label_binarizer.pkl"
+    encoder_filename = "../../model/encoder.pkl"
 
     with open(model_filename, "wb") as model_file:
         pickle.dump(model, model_file)
@@ -72,7 +75,7 @@ def main():
     for simplicity, the function can just output the performance on slices of just the categorical features.
     """
     # open a file context to write the metrics
-    with open("model/metrics.txt", "w") as f:
+    with open("../../model/metrics.txt", "w") as f:
 
 
         # iterate over the categorical features
