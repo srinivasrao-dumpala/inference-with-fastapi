@@ -1,142 +1,103 @@
 """
 Script for FastAPI instance and model inference
-author: Laurent veyssier
-Date: Dec. 16th 2022
+author: Srinivas Dumpala
+Date: Oct. 16th 2024
 """
-
-# Put the code for your API here.
-from fastapi import FastAPI, HTTPException
-from typing import Union, Optional
-# BaseModel from Pydantic is used to define data objects
-from pydantic import BaseModel
+import os
+import pickle
 import pandas as pd
-import os, pickle
-from ml.data import process_data
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from typing import List
+from starter.ml.data import process_data
+from starter.ml.model import train_model, compute_model_metrics, inference
+import logging
 
- # path to saved artifacts
-savepath = './model'
-filename = ['trained_model.pkl', 'encoder.pkl', 'labelizer.pkl']
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Declare the data object with its components and their type.
-class InputData(BaseModel):
-    age: int
-    workclass: str 
-    fnlgt: int
-    education: str
-    education_num: int
-    marital_status: str
-    occupation: str
-    relationship: str
-    race: str
-    sex: str
-    capital_gain: int
-    capital_loss: int
-    hours_per_week: int
-    native_country: str
+# Initialize FastAPI app
+app = FastAPI()
 
-    class Config:
-        schema_extra = {
-                        "example": {
-                                    'age':50,
-                                    'workclass':"Private", 
-                                    'fnlgt':234721,
-                                    'education':"Doctorate",
-                                    'education_num':16,
-                                    'marital_status':"Separated",
-                                    'occupation':"Exec-managerial",
-                                    'relationship':"Not-in-family",
-                                    'race':"Black",
-                                    'sex':"Female",
-                                    'capital_gain':0,
-                                    'capital_loss':0,
-                                    'hours_per_week':50,
-                                    'native_country':"United-States"
-                                    }
-                        }
+# Load model and label binarizer
+model_path = "model/model.pkl"
+lb_path = "model/label_binarizer.pkl"
 
+with open(model_path, "rb") as model_file:
+    model = pickle.load(model_file)
 
-# instantiate FastAPI app
-app = FastAPI(  title="Inference API",
-                description="An API that takes a sample and runs an inference",
-                version="1.0.0")
+with open(lb_path, "rb") as lb_file:
+    lb = pickle.load(lb_file)
 
-# load model artifacts on startup of the application to reduce latency
-@app.on_event("startup")
-async def startup_event(): 
-    global model, encoder, lb
-    # if saved model exits, load the model from disk
-    if os.path.isfile(os.path.join(savepath,filename[0])):
-        model = pickle.load(open(os.path.join(savepath,filename[0]), "rb"))
-        encoder = pickle.load(open(os.path.join(savepath,filename[1]), "rb"))
-        lb = pickle.load(open(os.path.join(savepath,filename[2]), "rb"))
+with open("model/encoder.pkl", "rb") as encoder_file:
+    encoder = pickle.load(encoder_file)
 
+# Define the DataInput Pydantic model
+class DataInput(BaseModel):
+    age: int = Field(..., example=39)
+    workclass: str = Field(..., example="State-gov")
+    fnlgt: int = Field(..., example=77516)
+    education: str = Field(..., example="Bachelors")
+    education_num: int = Field(..., example=13)
+    marital_status: str = Field(..., example="Never-married")
+    occupation: str = Field(..., example="Adm-clerical")
+    relationship: str = Field(..., example="Not-in-family")
+    race: str = Field(..., example="White")
+    sex: str = Field(..., example="Male")
+    capital_gain: int = Field(..., example=2174)
+    capital_loss: int = Field(..., example=0)
+    hours_per_week: int = Field(..., example=40)
+    native_country: str = Field(..., example="United-States")
 
+# Root endpoint
 @app.get("/")
-async def greetings():
-    return "Welcome to our model API"
+def read_root():
+    return {"message": "Welcome to the ML Model API Created with FastAPI!"}
+
+# Model inference endpoint
+@app.post("/predict")
+def predict(data: DataInput):
+    # Convert list of DataInput objects to DataFrame
+    input_df = pd.DataFrame([{"age": data.age,
+                        "workclass": data.workclass,
+                        "fnlgt": data.fnlgt,
+                        "education": data.education,
+                        "education-num": data.education_num,
+                        "marital-status": data.marital_status,
+                        "occupation": data.occupation,
+                        "relationship": data.relationship,
+                        "race": data.race,
+                        "sex": data.sex,
+                        "capital-gain": data.capital_gain,
+                        "capital-loss": data.capital_loss,
+                        "hours-per-week": data.hours_per_week,
+                        "native-country": data.native_country}])
 
 
-# This allows sending of data (our InferenceSample) via POST to the API.
-@app.post("/inference/")
-async def ingest_data(inference: InputData):
-    data = {  'age': inference.age,
-                'workclass': inference.workclass, 
-                'fnlgt': inference.fnlgt,
-                'education': inference.education,
-                'education-num': inference.education_num,
-                'marital-status': inference.marital_status,
-                'occupation': inference.occupation,
-                'relationship': inference.relationship,
-                'race': inference.race,
-                'sex': inference.sex,
-                'capital-gain': inference.capital_gain,
-                'capital-loss': inference.capital_loss,
-                'hours-per-week': inference.hours_per_week,
-                'native-country': inference.native_country,
-                }
+    # Logging the input data for debugging purposes
+    logger.info(f" input_data: {input_df.to_dict()}")
 
-    # prepare the sample for inference as a dataframe
-    sample = pd.DataFrame(data, index=[0])
-
-    # apply transformation to sample data
+    # Process input data
     cat_features = [
-                    "workclass",
-                    "education",
-                    "marital-status",
-                    "occupation",
-                    "relationship",
-                    "race",
-                    "sex",
-                    "native-country",
-                    ]
+        "workclass", "education", "marital-status", "occupation",
+        "relationship", "race", "sex", "native-country"
+    ]
+    X, _, _, _ = process_data(
+        input_df, categorical_features=cat_features, label=None, training=False, encoder=encoder, lb=lb
+    )
 
-    # if saved model exits, load the model from disk
-    if os.path.isfile(os.path.join(savepath,filename[0])):
-        model = pickle.load(open(os.path.join(savepath,filename[0]), "rb"))
-        encoder = pickle.load(open(os.path.join(savepath,filename[1]), "rb"))
-        lb = pickle.load(open(os.path.join(savepath,filename[2]), "rb"))
-        
-    sample,_,_,_ = process_data(
-                                sample, 
-                                categorical_features=cat_features, 
-                                training=False, 
-                                encoder=encoder, 
-                                lb=lb
-                                )
+    # Perform inference
+    predictions = inference(model, X)
+    # Convert predictions back to original labels
+    preds = lb.inverse_transform(predictions)
 
-    # get model prediction which is a one-dim array like [1]                            
-    prediction = model.predict(sample)
+    logging.info(f" predictions: {preds}")
 
-    # convert prediction to label and add to data output
-    if prediction[0]>0.5:
-        prediction = '>50K'
-    else:
-        prediction = '<=50K', 
-    data['prediction'] = prediction
+    # Return predictions
+    return {"predictions": preds.tolist()}
 
-
-    return data
-
-
-if __name__ == '__main__':
-    pass
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:10000
