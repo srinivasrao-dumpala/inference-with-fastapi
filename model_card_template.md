@@ -25,12 +25,6 @@ A 80-20 split was used to break this dataset into a train and test set. Stratifi
 ## Metrics
 The classification performance is evaluated using precision, recall and fbeta metrics. The confusion matrix is also calculated.
 
-The model achieves below scores using the test set:
-
-precision:0.759
-recall:0.643
-fbeta:0.696
-Confusion matrix: [[4625 320] [ 560 1008]]
 
 ## Ethical Considerations
 The dataset should not be considered as a fair representation of the salary distribution and should not be used to assume salary level of certain population categories.
