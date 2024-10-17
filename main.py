@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # Load model and label binarizer
-model_path = "model/model.pkl"
-lb_path = "model/label_binarizer.pkl"
+model_path = "./model/model.pkl"
+lb_path = "./model/label_binarizer.pkl"
 
 with open(model_path, "rb") as model_file:
     model = pickle.load(model_file)
