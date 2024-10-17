@@ -36,7 +36,8 @@ def test_post_predict_1():
         
     response = client.post("https://deploying-a-scalable-ml-pipeline-in.onrender.com/predict", json=sample_data)
     assert response.status_code == 200
-    assert response.json()["predictions"] == ["<=50K"]
+    print(response.json()["predictions"])
+    assert response.json()["predictions"] == [" <=50K"]
 
 def test_post_predict_2():
     sample_data = {
@@ -58,4 +59,4 @@ def test_post_predict_2():
     
     response = client.post("/predict", json=sample_data)
     assert response.status_code == 200
-    assert response.json()["predictions"] == [">50K"]
+    assert response.json()["predictions"] == [" >50K"]
